@@ -7,6 +7,7 @@ contract ERC20 {
     string public symbol;
 
     mapping(address => uint256) public balanceOf;
+    mapping(address => mapping(address => uint256)) public allowance;
 
     constructor(string memory _name, string memory _symbiol) {
         name = _name;
@@ -17,8 +18,8 @@ contract ERC20 {
         return 18;
     }
 
-    function transfer(address recipient, uint256 amount)
-        external
+    function _transfer(address recipient, uint256 amount)
+        private
         returns (bool)
     {
         require(recipient != address(0), "ERC20: transfer to the zero address");
