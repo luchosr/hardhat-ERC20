@@ -100,3 +100,4 @@ contract ERC20 {
 
         emit Transfer(from, address(0), amount);
     }
+}
