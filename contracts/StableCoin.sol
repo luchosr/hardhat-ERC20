@@ -9,6 +9,8 @@ contract StableCoin is ERC20 {
 
     uint256 public feeRatePercentage;
     Oracle public oracle;
+    uint256 public constant INITIAL_COLLATERAL_RATIO_PERCENTAGE = 10;
+
 
     constructor(uint256 _feeRatePercentage, Oracle _oracle) ERC("StablerCoin", "STC") {
       feeRatePercentage = _feeRatePercentage;
@@ -50,13 +52,19 @@ contract StableCoin is ERC20 {
       uint256 usdInEthPrice = oracle.getprice();
       uint256 deficitInEth = deficitInUsd / usdInEthPrice;
 
+      uint256 requiredInitialSurplusInUsd = (INITIAL_COLLATERAL_RATIO_PERCENTAGE *
+      totalSupply) / 100;
+      uint256 requiredInitialSurplusInEth = requiredInitialSurplusInUsd / usdInEthPrice;
+
+      require(msg.value >= deficitInEth + requiredInitialSurplusInEth,"STC: Initial collateral ratio not met");
+
       uint256 newInitialSurplusInEth = msg.value - deficitInEth;
       uint256 newInitialSurplusInUsd = newInitialSurplusInEth * usdInEthPrice;
 
       depositorCoin = new DepositorCoin();
       uint256 mintDepostorCoinAmount = newInitialSurplusInUsd;
       depositorCoin.mint(msg.sender, mintDepostorCoinAmount);
-      
+
         return;
       }
 
