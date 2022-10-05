@@ -41,4 +41,43 @@ contract StableCoin is ERC20 {
       }
       return (feeRatePercentage * ethAmount) / 100;
     }
+
+    function depositCollateralBuffer() external payable{
+      int256 deficitOrSurplusInUsd = _getDeficitOrSurplusInContractInUsd();
+      
+      if(deficitOrSurplus <= 0) {
+      uint256 deficitInUsd = uint256(deficitOrSurplusInUsd * -1);
+      uint256 usdInEthPrice = oracle.getprice();
+      uint256 deficitInEth = deficitInUsd / usdInEthPrice;
+
+      uint256 newInitialSurplusInEth = msg.value - deficitInEth;
+      uint256 newInitialSurplusInUsd = newInitialSurplusInEth * usdInEthPrice;
+
+      depositorCoin = new DepositorCoin();
+      uint256 mintDepostorCoinAmount = newInitialSurplusInUsd;
+      depositorCoin.mint(msg.sender, mintDepostorCoinAmount);
+      
+        return;
+      }
+
+      uint256 surplusInUsd = uint256(deficitOrSurplusInUsd);
+      uint256 dpcInUsdPrice = _getDPCinUsdPrice(surplusInUsd); 
+      uint256 mintDepositorCoinAmount = (msg.value * dpcInUsdPrice ) / oracle.getPrice();
+
+      depositorCoin.mint(msg.sender, mintDepositorCoinAmount);
+    }
+
+    function _getDeficitOrSurplusInContractInUsd() private view returns (int256)  {
+      uint256 ethContractBalanceInUsd = (address(this).balance - msg.value) * oracle.getprice();
+
+      uint256 totalStableCoinBalanceinUsd = totalSupply;
+
+      int256 deficitOrSurplus = int256(ethContractBalanceInUsd) - int256(totalStableCoinBalanceinUsd);
+
+      return deficitOrSurplus;
+    }
+
+    function _getDPCinUsdPrice(uint256 surplusInUsd) private view returns (uint256){
+      return depositorCoin.totalSupply() / surplusInUsd;
+    }
 }
