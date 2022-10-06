@@ -15,7 +15,7 @@ contract StableCoin is ERC20 {
     constructor(uint256 _feeRatePercentage, Oracle _oracle) ERC("StablerCoin", "STC") {
       feeRatePercentage = _feeRatePercentage;
       oracle = _oracle;
-    }
+    } 
 
     function mint() external payable {
         uint256 fee = _getFee(msg.value);
