@@ -3,6 +3,7 @@ pragma solidity 0.8.17;
 import {ERC20} from "./ERC20.sol";
 import {DepositorCoin} from "./DerpositorCoin.sol";
 import {Oracle} from "./Oracle.sol";
+import {WadLib} from "./WadLib.sol";
 
 contract StableCoin is ERC20 {
     DepositorCoin public depositorCoin;
@@ -11,11 +12,12 @@ contract StableCoin is ERC20 {
     Oracle public oracle;
     uint256 public constant INITIAL_COLLATERAL_RATIO_PERCENTAGE = 10;
 
-
-    constructor(uint256 _feeRatePercentage, Oracle _oracle) ERC("StablerCoin", "STC") {
-      feeRatePercentage = _feeRatePercentage;
-      oracle = _oracle;
-    } 
+    constructor(uint256 _feeRatePercentage, Oracle _oracle)
+        ERC("StablerCoin", "STC")
+    {
+        feeRatePercentage = _feeRatePercentage;
+        oracle = _oracle;
+    }
 
     function mint() external payable {
         uint256 fee = _getFee(msg.value);
@@ -25,88 +27,112 @@ contract StableCoin is ERC20 {
         _mint(msg.sender, mintStableCounAmount);
     }
 
-    function burn(uint256 burnStableCoinAmount) external{
-      int256 deficitOrSurplusInUsd = _getDeficitOrSurplusInContractInUsd();
-      require( deficitOrSurplusInUsd >= 0,"STC: Cannot burn while in deficit");
+    function burn(uint256 burnStableCoinAmount) external {
+        int256 deficitOrSurplusInUsd = _getDeficitOrSurplusInContractInUsd();
+        require(
+            deficitOrSurplusInUsd >= 0,
+            "STC: Cannot burn while in deficit"
+        );
 
-      _burn(msg.sender, burnStableCoinAmount);
-      
-      uint256 refundingEth = burnStableCoinAmount / oracle.getprice();
-      uint256 fee = _getFee(refundingEth);
-      uint256 remainingRefundingEth = refundingEth - fee;
+        _burn(msg.sender, burnStableCoinAmount);
 
-      (bool success,) = msg.sender.call{value:remainingRefundingEth}("");
-      require(success, "STC: Burn refund transaction failed");
+        uint256 refundingEth = burnStableCoinAmount / oracle.getprice();
+        uint256 fee = _getFee(refundingEth);
+        uint256 remainingRefundingEth = refundingEth - fee;
+
+        (bool success, ) = msg.sender.call{value: remainingRefundingEth}("");
+        require(success, "STC: Burn refund transaction failed");
     }
 
-    function _getFee (uint256 ethAmount)private view returns (uint256){
-      bool hasDepositors = address(depositorCoin) 1= address(0) && depositorCoin.totalSupply() > 0;
-      if(!hasDepositors){
-        return 0;
-      }
-      return (feeRatePercentage * ethAmount) / 100;
+    function _getFee(uint256 ethAmount) private view returns (uint256) {
+        bool hasDepositors = address(depositorCoin) != address(0) &&
+            depositorCoin.totalSupply() > 0;
+        if (!hasDepositors) {
+            return 0;
+        }
+        return (feeRatePercentage * ethAmount) / 100;
     }
 
-    function depositCollateralBuffer() external payable{
-      int256 deficitOrSurplusInUsd = _getDeficitOrSurplusInContractInUsd();
-      
-      if(deficitOrSurplus <= 0) {
-      uint256 deficitInUsd = uint256(deficitOrSurplusInUsd * -1);
-      uint256 usdInEthPrice = oracle.getprice();
-      uint256 deficitInEth = deficitInUsd / usdInEthPrice;
+    function depositCollateralBuffer() external payable {
+        int256 deficitOrSurplusInUsd = _getDeficitOrSurplusInContractInUsd();
 
-      uint256 requiredInitialSurplusInUsd = (INITIAL_COLLATERAL_RATIO_PERCENTAGE *
-      totalSupply) / 100;
-      uint256 requiredInitialSurplusInEth = requiredInitialSurplusInUsd / usdInEthPrice;
+        if (deficitOrSurplus <= 0) {
+            uint256 deficitInUsd = uint256(deficitOrSurplusInUsd * -1);
+            uint256 usdInEthPrice = oracle.getprice();
+            uint256 deficitInEth = deficitInUsd / usdInEthPrice;
 
-      require(msg.value >= deficitInEth + requiredInitialSurplusInEth,"STC: Initial collateral ratio not met");
+            uint256 requiredInitialSurplusInUsd = (INITIAL_COLLATERAL_RATIO_PERCENTAGE *
+                    totalSupply) / 100;
+            uint256 requiredInitialSurplusInEth = requiredInitialSurplusInUsd /
+                usdInEthPrice;
 
-      uint256 newInitialSurplusInEth = msg.value - deficitInEth;
-      uint256 newInitialSurplusInUsd = newInitialSurplusInEth * usdInEthPrice;
+            require(
+                msg.value >= deficitInEth + requiredInitialSurplusInEth,
+                "STC: Initial collateral ratio not met"
+            );
 
-      depositorCoin = new DepositorCoin();
-      uint256 mintDepostorCoinAmount = newInitialSurplusInUsd;
-      depositorCoin.mint(msg.sender, mintDepostorCoinAmount);
+            uint256 newInitialSurplusInEth = msg.value - deficitInEth;
+            uint256 newInitialSurplusInUsd = newInitialSurplusInEth *
+                usdInEthPrice;
 
-        return;
-      }
+            depositorCoin = new DepositorCoin();
+            uint256 mintDepostorCoinAmount = newInitialSurplusInUsd;
+            depositorCoin.mint(msg.sender, mintDepostorCoinAmount);
 
-      uint256 surplusInUsd = uint256(deficitOrSurplusInUsd);
-      uint256 dpcInUsdPrice = _getDPCinUsdPrice(surplusInUsd); 
-      uint256 mintDepositorCoinAmount = (msg.value * dpcInUsdPrice ) / oracle.getPrice();
+            return;
+        }
 
-      depositorCoin.mint(msg.sender, mintDepositorCoinAmount);
+        uint256 surplusInUsd = uint256(deficitOrSurplusInUsd);
+        WadLib.Wad dpcInUsdPrice = _getDPCinUsdPrice(surplusInUsd);
+        uint256 mintDepositorCoinAmount = (msg.value.mulWad(dpcInUsdPrice)) /
+            oracle.getPrice();
+
+        depositorCoin.mint(msg.sender, mintDepositorCoinAmount);
     }
 
-    function withdrawCollateralBuffer(uint256 burnDepositorCoinAmount)external {
+    function withdrawCollateralBuffer(uint256 burnDepositorCoinAmount)
+        external
+    {
+        require(
+            depositorCoin.balanceOf(msg.sender) >= burnDepositorCoinAmount,
+            "STC: Sender has insuffient DPC funds"
+        );
 
-      require(depositorCoin.balanceOf(msg.sender) >= burnDepositorCoinAmount,"STC: Sender has insuffient DPC funds");
+        depositorCoin.burn(msg.sender, burnDepositorCoinAmount);
 
-      depositorCoin.burn(msg.sender, burnDepositorCoinAmount);
+        int256 deficitOrSurplusInUsd = _getDeficitOrSurplusInContractInUsd();
+        require(deficitOrSurplusInUsd > 0, "STC: No funds to withdraw");
 
-      int256 deficitOrSurplusInUsd = _getDeficitOrSurplusInContractInUsd();
-      require(deficitOrSurplusInUsd > 0, "STC: No funds to withdraw");
+        uint256 surplusInUsd = uint256(deficitOrSurplusInUsd);
+        WadLib.Wad dpcInUsdPrice = _getDPCinUsdPrice(surplusInUsd);
+        uint256 refundingUsd = burnDepositorCoinAmount.mulWad(dpcInUsdPrice);
+        uint256 refundingEth = refundingUsd / oracle.getPrice();
 
-      uint256 surplusInUsd = uint256(deficitOrSurplusInUsd);
-      WadLib.Wad dpcInUsdPrice = _getDPCinUsdPrice(surplusInUsd);
-      uint256 refundingUsd = burnDepositorCoinAmount/dpcInUsdPrice;
-      uint256 refundingEth = refundingUsd / oracle.getPrice();
-
-      (bool success, ) = msg.sender.call{value: refundingEth}("");
-      require(success, "STC: Withdraw refund transaction failed");
+        (bool success, ) = msg.sender.call{value: refundingEth}("");
+        require(success, "STC: Withdraw refund transaction failed");
     }
 
-    function _getDeficitOrSurplusInContractInUsd() private view returns (int256)  {
-      uint256 ethContractBalanceInUsd = (address(this).balance - msg.value) * oracle.getprice();
+    function _getDeficitOrSurplusInContractInUsd()
+        private
+        view
+        returns (int256)
+    {
+        uint256 ethContractBalanceInUsd = (address(this).balance - msg.value) *
+            oracle.getprice();
 
-      uint256 totalStableCoinBalanceinUsd = totalSupply;
+        uint256 totalStableCoinBalanceinUsd = totalSupply;
 
-      int256 deficitOrSurplus = int256(ethContractBalanceInUsd) - int256(totalStableCoinBalanceinUsd);
+        int256 deficitOrSurplus = int256(ethContractBalanceInUsd) -
+            int256(totalStableCoinBalanceinUsd);
 
-      return deficitOrSurplus;
+        return deficitOrSurplus;
     }
 
-    function _getDPCinUsdPrice(uint256 surplusInUsd) private view returns (uint256){
-      return depositorCoin.totalSupply() / surplusInUsd;
+    function _getDPCinUsdPrice(uint256 surplusInUsd)
+        private
+        view
+        returns (WadLib.wad)
+    {
+        return WadLib.fromFraction(depositorCoin.totalSupply(), surplusInUsd);
     }
 }
