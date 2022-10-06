@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.17;
 import {ERC20} from "./ERC20.sol";
-import {DepositorCoin} from "./DerpositorCoin.sol";
+import {DepositorCoin} from "./DepositorCoin.sol";
 import {Oracle} from "./Oracle.sol";
 import {WadLib} from "./WadLib.sol";
 
@@ -20,7 +20,7 @@ contract StableCoin is ERC20 {
     uint256 public constant INITIAL_COLLATERAL_RATIO_PERCENTAGE = 10;
 
     constructor(uint256 _feeRatePercentage, Oracle _oracle)
-        ERC("StablerCoin", "STC")
+        ERC20("StablerCoin", "STC")
     {
         feeRatePercentage = _feeRatePercentage;
         oracle = _oracle;
@@ -30,7 +30,7 @@ contract StableCoin is ERC20 {
         uint256 fee = _getFee(msg.value);
         uint256 remainingEth = msg.value - fee;
 
-        uint256 mintStableCounAmount = remainingEth * oracle.getprice();
+        uint256 mintStableCounAmount = remainingEth * oracle.getPrice();
         _mint(msg.sender, mintStableCounAmount);
     }
 
@@ -43,7 +43,7 @@ contract StableCoin is ERC20 {
 
         _burn(msg.sender, burnStableCoinAmount);
 
-        uint256 refundingEth = burnStableCoinAmount / oracle.getprice();
+        uint256 refundingEth = burnStableCoinAmount / oracle.getPrice();
         uint256 fee = _getFee(refundingEth);
         uint256 remainingRefundingEth = refundingEth - fee;
 
@@ -63,9 +63,9 @@ contract StableCoin is ERC20 {
     function depositCollateralBuffer() external payable {
         int256 deficitOrSurplusInUsd = _getDeficitOrSurplusInContractInUsd();
 
-        if (deficitOrSurplus <= 0) {
+        if (deficitOrSurplusInUsd <= 0) {
             uint256 deficitInUsd = uint256(deficitOrSurplusInUsd * -1);
-            uint256 usdInEthPrice = oracle.getprice();
+            uint256 usdInEthPrice = oracle.getPrice();
             uint256 deficitInEth = deficitInUsd / usdInEthPrice;
 
             uint256 requiredInitialSurplusInUsd = (INITIAL_COLLATERAL_RATIO_PERCENTAGE *
@@ -76,8 +76,8 @@ contract StableCoin is ERC20 {
             if (msg.value < deficitInEth + requiredInitialSurplusInEth) {
                 uint256 minimumDepositAmount = deficitInEth +
                     requiredInitialSurplusInEth;
-                revert InitialCollateralRarioError(
-                    "STC: Initial collateral ratio not met, minimun is ",
+                revert InitialCollateralRatioError(
+                    "STC: Initial collateral ratio not met, minimum is ",
                     minimumDepositAmount
                 );
             }
@@ -95,8 +95,8 @@ contract StableCoin is ERC20 {
 
         uint256 surplusInUsd = uint256(deficitOrSurplusInUsd);
         WadLib.Wad dpcInUsdPrice = _getDPCinUsdPrice(surplusInUsd);
-        uint256 mintDepositorCoinAmount = (msg.value.mulWad(dpcInUsdPrice)) /
-            oracle.getPrice();
+        uint256 mintDepositorCoinAmount = ((msg.value.mulWad(dpcInUsdPrice)) /
+            oracle.getPrice());
 
         depositorCoin.mint(msg.sender, mintDepositorCoinAmount);
     }
@@ -129,7 +129,7 @@ contract StableCoin is ERC20 {
         returns (int256)
     {
         uint256 ethContractBalanceInUsd = (address(this).balance - msg.value) *
-            oracle.getprice();
+            oracle.getPrice();
 
         uint256 totalStableCoinBalanceinUsd = totalSupply;
 
@@ -139,10 +139,10 @@ contract StableCoin is ERC20 {
         return deficitOrSurplus;
     }
 
-    function _getDPCinUsdPrice(uint256 surplusInUsd)
+      function _getDPCinUsdPrice(uint256 surplusInUsd)
         private
         view
-        returns (WadLib.wad)
+        returns (WadLib.Wad)
     {
         return WadLib.fromFraction(depositorCoin.totalSupply(), surplusInUsd);
     }
