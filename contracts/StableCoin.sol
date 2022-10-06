@@ -6,6 +6,13 @@ import {Oracle} from "./Oracle.sol";
 import {WadLib} from "./WadLib.sol";
 
 contract StableCoin is ERC20 {
+    using WadLib for uint256;
+
+    error InitialCollateralRatioError(
+        string message,
+        uint256 minimumDerpositAmount
+    );
+
     DepositorCoin public depositorCoin;
 
     uint256 public feeRatePercentage;
@@ -66,10 +73,14 @@ contract StableCoin is ERC20 {
             uint256 requiredInitialSurplusInEth = requiredInitialSurplusInUsd /
                 usdInEthPrice;
 
-            require(
-                msg.value >= deficitInEth + requiredInitialSurplusInEth,
-                "STC: Initial collateral ratio not met"
-            );
+            if (msg.value < deficitInEth + requiredInitialSurplusInEth) {
+                uint256 minimumDepositAmount = deficitInEth +
+                    requiredInitialSurplusInEth;
+                revert InitialCollateralRarioError(
+                    "STC: Initial collateral ratio not met, minimun is ",
+                    minimumDepositAmount
+                );
+            }
 
             uint256 newInitialSurplusInEth = msg.value - deficitInEth;
             uint256 newInitialSurplusInUsd = newInitialSurplusInEth *
